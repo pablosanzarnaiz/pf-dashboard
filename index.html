@@ -1,0 +1,852 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Petit Forestier — Deployment Dashboard</title>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.7/dist/chart.umd.min.js"></script>
+<style>
+  :root {
+    --bg: #0f1117;
+    --card: #1a1d27;
+    --border: #2a2d3a;
+    --text: #e4e4e7;
+    --muted: #8b8d97;
+    --accent: #3b82f6;
+    --green: #22c55e;
+    --amber: #f59e0b;
+    --red: #ef4444;
+    --purple: #a855f7;
+    --cyan: #06b6d4;
+    --orange: #f97316;
+    --radius: 12px;
+  }
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; background: var(--bg); color: var(--text); line-height: 1.5; }
+
+  /* Header */
+  .header { display: flex; align-items: center; justify-content: space-between; padding: 20px 32px; border-bottom: 1px solid var(--border); }
+  .header h1 { font-size: 22px; font-weight: 600; }
+  .header h1 span { color: var(--green); }
+  .header-right { display: flex; align-items: center; gap: 16px; }
+  .badge { padding: 4px 12px; border-radius: 20px; font-size: 12px; font-weight: 500; }
+  .badge-blue { background: rgba(59,130,246,.15); color: var(--accent); }
+  .last-update { font-size: 13px; color: var(--muted); }
+
+  /* Layout */
+  .container { max-width: 1440px; margin: 0 auto; padding: 24px 32px; }
+  .grid-4 { display: grid; grid-template-columns: repeat(4, 1fr); gap: 16px; margin-bottom: 24px; }
+  .grid-3 { display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; margin-bottom: 24px; }
+  .grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin-bottom: 24px; }
+  .grid-2-1 { display: grid; grid-template-columns: 2fr 1fr; gap: 16px; margin-bottom: 24px; }
+
+  /* Cards */
+  .card { background: var(--card); border: 1px solid var(--border); border-radius: var(--radius); padding: 20px; }
+  .card-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 16px; }
+  .card-title { font-size: 14px; font-weight: 500; color: var(--muted); text-transform: uppercase; letter-spacing: .5px; }
+  .section-title { font-size: 18px; font-weight: 600; margin-bottom: 16px; display: flex; align-items: center; gap: 8px; }
+  .section-title .dot { width: 8px; height: 8px; border-radius: 50%; }
+
+  /* KPI cards */
+  .kpi { text-align: center; }
+  .kpi-value { font-size: 36px; font-weight: 700; line-height: 1.1; }
+  .kpi-label { font-size: 13px; color: var(--muted); margin-top: 4px; }
+  .kpi-change { font-size: 12px; margin-top: 6px; display: inline-flex; align-items: center; gap: 4px; padding: 2px 8px; border-radius: 12px; }
+  .kpi-up { background: rgba(34,197,94,.12); color: var(--green); }
+  .kpi-down { background: rgba(239,68,68,.12); color: var(--red); }
+  .kpi-neutral { background: rgba(139,141,151,.12); color: var(--muted); }
+
+  /* Country cards */
+  .country-card { display: flex; align-items: center; gap: 14px; }
+  .country-flag { font-size: 28px; line-height: 1; }
+  .country-info { flex: 1; }
+  .country-name { font-size: 14px; font-weight: 500; }
+  .country-count { font-size: 24px; font-weight: 700; }
+  .country-bar { height: 6px; border-radius: 3px; background: var(--border); margin-top: 6px; overflow: hidden; }
+  .country-bar-fill { height: 100%; border-radius: 3px; transition: width .4s; }
+  .country-delta { font-size: 11px; font-weight: 500; margin-left: 6px; }
+  .country-delta.up { color: var(--green); }
+  .country-delta.down { color: var(--red); }
+  .country-delta.flat { color: var(--muted); }
+
+  /* Tables */
+  table { width: 100%; border-collapse: collapse; font-size: 13px; }
+  th { text-align: left; padding: 10px 12px; color: var(--muted); font-weight: 500; font-size: 12px; text-transform: uppercase; letter-spacing: .4px; border-bottom: 1px solid var(--border); }
+  td { padding: 10px 12px; border-bottom: 1px solid var(--border); }
+  tr:last-child td { border-bottom: none; }
+  tr:hover td { background: rgba(59,130,246,.04); }
+
+  /* Status pills */
+  .status { display: inline-flex; align-items: center; gap: 5px; padding: 3px 10px; border-radius: 12px; font-size: 12px; font-weight: 500; white-space: nowrap; }
+  .status::before { content: ''; width: 6px; height: 6px; border-radius: 50%; }
+  .status-ongoing { background: rgba(59,130,246,.12); color: var(--accent); }
+  .status-ongoing::before { background: var(--accent); }
+  .status-finished { background: rgba(34,197,94,.12); color: var(--green); }
+  .status-finished::before { background: var(--green); }
+  .status-not-started { background: rgba(139,141,151,.12); color: var(--muted); }
+  .status-not-started::before { background: var(--muted); }
+  .status-blocked { background: rgba(239,68,68,.12); color: var(--red); }
+  .status-blocked::before { background: var(--red); }
+
+  /* Charts */
+  .chart-container { position: relative; width: 100%; }
+  .chart-container.h-260 { height: 260px; }
+  .chart-container.h-200 { height: 200px; }
+  .chart-container.h-300 { height: 300px; }
+
+  /* Tabs */
+  .tabs { display: flex; gap: 4px; margin-bottom: 16px; background: rgba(42,45,58,.5); border-radius: 8px; padding: 3px; width: fit-content; }
+  .tab { padding: 6px 16px; border-radius: 6px; font-size: 13px; cursor: pointer; color: var(--muted); transition: all .2s; border: none; background: none; }
+  .tab.active { background: var(--accent); color: #fff; }
+  .tab:hover:not(.active) { color: var(--text); }
+
+  /* Hot topic cards */
+  .topic-card { padding: 14px 16px; border-radius: 8px; border-left: 3px solid; margin-bottom: 10px; background: rgba(26,29,39,.6); }
+  .topic-card.priority-high { border-color: var(--red); }
+  .topic-card.priority-medium { border-color: var(--amber); }
+  .topic-card.priority-low { border-color: var(--green); }
+  .topic-title { font-size: 14px; font-weight: 500; margin-bottom: 4px; }
+  .topic-meta { font-size: 12px; color: var(--muted); display: flex; gap: 12px; }
+
+  /* Projection bar */
+  .projection-row { display: flex; align-items: center; gap: 12px; margin-bottom: 12px; }
+  .projection-label { width: 140px; font-size: 13px; color: var(--muted); }
+  .projection-bar-bg { flex: 1; height: 24px; background: var(--border); border-radius: 4px; overflow: hidden; position: relative; }
+  .projection-bar-fill { height: 100%; border-radius: 4px; display: flex; align-items: center; padding-left: 8px; font-size: 11px; font-weight: 600; color: #fff; min-width: fit-content; }
+  .projection-target { font-size: 13px; width: 60px; text-align: right; color: var(--muted); }
+
+  /* Collapsible country sections */
+  .country-section { margin-bottom: 8px; }
+  .country-toggle { display: flex; align-items: center; gap: 10px; padding: 10px 14px; background: rgba(42,45,58,.4); border: 1px solid var(--border); border-radius: 8px; cursor: pointer; width: 100%; text-align: left; color: var(--text); font-size: 14px; font-weight: 600; transition: background .2s; }
+  .country-toggle:hover { background: rgba(42,45,58,.7); }
+  .country-toggle .toggle-arrow { transition: transform .2s; font-size: 10px; color: var(--muted); }
+  .country-toggle.open .toggle-arrow { transform: rotate(90deg); }
+  .country-toggle .toggle-summary { margin-left: auto; font-size: 12px; font-weight: 400; color: var(--muted); }
+  .country-body { display: none; padding: 12px 14px 4px; }
+  .country-body.open { display: block; }
+  .sub-tab-row { display: flex; gap: 4px; margin-bottom: 10px; }
+  .sub-tab { padding: 4px 12px; border-radius: 6px; font-size: 12px; cursor: pointer; color: var(--muted); background: rgba(42,45,58,.5); border: none; transition: all .2s; }
+  .sub-tab.active { background: var(--accent); color: #fff; }
+  .sub-tab:hover:not(.active) { color: var(--text); }
+  .sub-panel { display: none; }
+  .sub-panel.active { display: block; }
+  .city-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(180px, 1fr)); gap: 6px; }
+  .city-row { display: flex; justify-content: space-between; align-items: center; padding: 5px 10px; background: rgba(26,29,39,.6); border-radius: 6px; font-size: 12px; }
+  .city-row .city-name { color: var(--text); }
+  .city-row .city-count { font-weight: 600; color: var(--accent); }
+
+  /* Responsive */
+  @media (max-width: 1200px) { .grid-4 { grid-template-columns: repeat(2, 1fr); } }
+  @media (max-width: 900px) {
+    .grid-3, .grid-2, .grid-2-1 { grid-template-columns: 1fr; }
+    .container { padding: 16px; }
+    .header { flex-direction: column; gap: 12px; align-items: flex-start; }
+  }
+</style>
+</head>
+<body>
+
+<!-- Header -->
+<div class="header">
+  <h1><span>Petit Forestier</span> &middot; Deployment Dashboard</h1>
+  <div class="header-right">
+    <span class="badge badge-blue">Bi-weekly Update</span>
+    <span class="last-update">Last update: Feb 26, 2026 at 15:23</span>
+  </div>
+</div>
+
+<div class="container">
+
+<!-- =========================================================
+     SECTION 1 — KEY DEPLOYMENT METRICS
+     ========================================================= -->
+<div class="section-title"><span class="dot" style="background:var(--accent)"></span> Deployment Overview</div>
+
+<div class="grid-4">
+  <div class="card kpi">
+    <div class="card-title">Total Fleet Equipped</div>
+    <div class="kpi-value" style="color:var(--accent)">1,577</div>
+    <div class="kpi-label">devices in database</div>
+    <div class="kpi-change kpi-up">&#9650; 142 (1,435)</div>
+  </div>
+  <div class="card kpi">
+    <div class="card-title">Total Connected</div>
+    <div class="kpi-value" style="color:var(--green)">1,085</div>
+    <div class="kpi-label">actively communicating</div>
+    <div class="kpi-change kpi-up">&#9650; 148 (937)</div>
+  </div>
+  <div class="card kpi">
+    <div class="card-title">Internal Only</div>
+    <div class="kpi-value">1,238</div>
+    <div class="kpi-label">PF owned vehicles</div>
+    <div class="kpi-change kpi-up">&#9650; 104 (1,134)</div>
+  </div>
+  <div class="card kpi">
+    <div class="card-title">Shared with Clients</div>
+    <div class="kpi-value" style="color:var(--purple)">339</div>
+    <div class="kpi-label">data-sharing active</div>
+    <div class="kpi-change kpi-up">&#9650; 38 (301)</div>
+  </div>
+</div>
+
+<!-- =========================================================
+     SECTION 2 — COUNTRY BREAKDOWN
+     ========================================================= -->
+<div class="grid-2-1">
+
+  <!-- Country breakdown -->
+  <div class="card">
+    <div class="card-header">
+      <div class="card-title">Deployment by Country</div>
+    </div>
+    <div id="countryGrid" style="display:grid; grid-template-columns:1fr 1fr; gap:16px;">
+      <!-- Spain -->
+      <div class="country-card" data-country="Spain">
+        <div class="country-flag">&#127466;&#127480;</div>
+        <div class="country-info">
+          <div class="country-name">Spain</div>
+          <div class="country-count"><span class="country-value">725</span><span class="country-delta up">+116</span></div>
+          <div class="country-bar"><div class="country-bar-fill" style="width:87%; background:var(--accent)"></div></div>
+        </div>
+      </div>
+      <!-- Portugal -->
+      <div class="country-card" data-country="Portugal">
+        <div class="country-flag">&#127477;&#127481;</div>
+        <div class="country-info">
+          <div class="country-name">Portugal</div>
+          <div class="country-count"><span class="country-value">81</span><span class="country-delta up">+22</span></div>
+          <div class="country-bar"><div class="country-bar-fill" style="width:10%; background:var(--cyan)"></div></div>
+        </div>
+      </div>
+      <!-- Poland -->
+      <div class="country-card" data-country="Poland">
+        <div class="country-flag">&#127477;&#127473;</div>
+        <div class="country-info">
+          <div class="country-name">Poland</div>
+          <div class="country-count"><span class="country-value">20</span><span class="country-delta up">+8</span></div>
+          <div class="country-bar"><div class="country-bar-fill" style="width:2%; background:var(--amber)"></div></div>
+        </div>
+      </div>
+      <!-- Italy -->
+      <div class="country-card" data-country="Italy">
+        <div class="country-flag">&#127470;&#127481;</div>
+        <div class="country-info">
+          <div class="country-name">Italy</div>
+          <div class="country-count"><span class="country-value">10</span><span class="country-delta up">+3</span></div>
+          <div class="country-bar"><div class="country-bar-fill" style="width:1%; background:var(--green)"></div></div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Orders by country donut (MyAdmin PETI01) -->
+  <div class="card">
+    <div class="card-header">
+      <div class="card-title">Devices Ordered by Country</div>
+      <span style="font-size:11px; color:var(--muted);">MyAdmin &middot; ERP PETI01</span>
+    </div>
+    <div class="chart-container h-200">
+      <canvas id="connectivityChart"></canvas>
+    </div>
+    <div style="display:flex; flex-wrap:wrap; justify-content:center; gap:12px 18px; margin-top:12px; font-size:11px;">
+      <span style="color:var(--accent)">&#9679; Spain 1,319</span>
+      <span style="color:var(--cyan)">&#9679; Portugal 178</span>
+      <span style="color:var(--amber)">&#9679; Poland 80</span>
+      <span style="color:var(--green)">&#9679; Italy 25</span>
+      <span style="color:var(--orange)">&#9679; France 39</span>
+      <span style="font-weight:600; color:var(--text)">Total: 1,644</span>
+    </div>
+  </div>
+</div>
+
+<!-- =========================================================
+     SECTION 3 — DEPLOYMENT TREND
+     ========================================================= -->
+<div class="grid-2">
+  <div class="card">
+    <div class="card-header">
+      <div class="card-title">Fleet Growth Over Time</div>
+    </div>
+    <div class="chart-container h-200">
+      <canvas id="trendChart"></canvas>
+    </div>
+  </div>
+
+  <div class="card">
+    <div class="card-header">
+      <div class="card-title">Internal vs Shared Split</div>
+    </div>
+    <div class="chart-container h-200">
+      <canvas id="splitChart"></canvas>
+    </div>
+  </div>
+</div>
+
+<!-- =========================================================
+     SECTION 4 — 2026 PROJECTIONS
+     ========================================================= -->
+<div class="card" style="margin-bottom:24px;">
+  <div class="card-header">
+    <div class="card-title">2026 Deployment Projections</div>
+    <span class="badge badge-blue">Target: 6,000 vehicles (2,200 + 3,800 new)</span>
+  </div>
+
+  <!-- ── SPAIN ── -->
+  <div class="country-section" id="proj-spain">
+    <button class="country-toggle open" onclick="toggleProj('spain')">
+      <span>&#127466;&#127480;</span>
+      <span>Spain</span>
+      <span class="toggle-arrow">&#9654;</span>
+      <span class="toggle-summary">1,463 devices &middot; ~2,300 target</span>
+    </button>
+    <div class="country-body open" id="proj-spain-body">
+      <div class="sub-tab-row">
+        <button class="sub-tab active" onclick="showSubTab('spain','cities',this)">Cities (31)</button>
+        <button class="sub-tab" onclick="showSubTab('spain','smartconnect',this)">SmartConnect</button>
+        <button class="sub-tab" onclick="showSubTab('spain','newvehicles',this)">New Vehicles</button>
+      </div>
+      <div class="sub-panel active" id="spain-cities">
+        <div class="city-grid">
+          <div class="city-row"><span class="city-name">Madrid Mostoles</span><span class="city-count">169</span></div>
+          <div class="city-row"><span class="city-name">Madrid</span><span class="city-count">83</span></div>
+          <div class="city-row"><span class="city-name">Malaga</span><span class="city-count">38</span></div>
+          <div class="city-row"><span class="city-name">Granollers</span><span class="city-count">34</span></div>
+          <div class="city-row"><span class="city-name">Cordoba</span><span class="city-count">21</span></div>
+          <div class="city-row"><span class="city-name">Barcelona</span><span class="city-count">20</span></div>
+          <div class="city-row"><span class="city-name">Tarragona</span><span class="city-count">20</span></div>
+          <div class="city-row"><span class="city-name">Sevilla</span><span class="city-count">19</span></div>
+          <div class="city-row"><span class="city-name">Alicante</span><span class="city-count">18</span></div>
+          <div class="city-row"><span class="city-name">Girona</span><span class="city-count">17</span></div>
+          <div class="city-row"><span class="city-name">Valencia</span><span class="city-count">16</span></div>
+          <div class="city-row"><span class="city-name">La Coruna</span><span class="city-count">11</span></div>
+          <div class="city-row"><span class="city-name">Madrid Coslada</span><span class="city-count">10</span></div>
+          <div class="city-row"><span class="city-name">Pamplona</span><span class="city-count">10</span></div>
+          <div class="city-row"><span class="city-name">Santander</span><span class="city-count">9</span></div>
+          <div class="city-row"><span class="city-name">Zaragoza</span><span class="city-count">8</span></div>
+          <div class="city-row"><span class="city-name">Lleida</span><span class="city-count">7</span></div>
+          <div class="city-row"><span class="city-name">Bilbao</span><span class="city-count">6</span></div>
+          <div class="city-row"><span class="city-name">Mallorca</span><span class="city-count">6</span></div>
+          <div class="city-row"><span class="city-name">Asturias</span><span class="city-count">6</span></div>
+          <div class="city-row"><span class="city-name">San Sebastian</span><span class="city-count">5</span></div>
+          <div class="city-row"><span class="city-name">TC - Girona</span><span class="city-count">5</span></div>
+          <div class="city-row"><span class="city-name">Merida</span><span class="city-count">4</span></div>
+          <div class="city-row"><span class="city-name">Valladolid</span><span class="city-count">3</span></div>
+          <div class="city-row"><span class="city-name">Cadiz</span><span class="city-count">3</span></div>
+          <div class="city-row"><span class="city-name">Las Palmas</span><span class="city-count">3</span></div>
+          <div class="city-row"><span class="city-name">Tenerife</span><span class="city-count">3</span></div>
+          <div class="city-row"><span class="city-name">Vitoria</span><span class="city-count">3</span></div>
+          <div class="city-row"><span class="city-name">Madrid PFM</span><span class="city-count">2</span></div>
+          <div class="city-row"><span class="city-name">Vic</span><span class="city-count">1</span></div>
+          <div class="city-row"><span class="city-name">Murcia</span><span class="city-count">1</span></div>
+        </div>
+        <div style="margin-top:8px; font-size:11px; color:var(--muted);">902 devices assigned at country level only &middot; Source: MyGeotab groups (excl. archived &amp; CLIENTS)</div>
+      </div>
+      <div class="sub-panel" id="spain-smartconnect">
+        <div class="projection-row">
+          <div class="projection-label">Móstoles (retrofit)</div>
+          <div class="projection-bar-bg"><div class="projection-bar-fill" style="width:100%; background:var(--accent);">200 &#10003;</div></div>
+          <div class="projection-target">/ 200</div>
+        </div>
+        <div class="projection-row">
+          <div class="projection-label">Barcelona</div>
+          <div class="projection-bar-bg"><div class="projection-bar-fill" style="width:0%; background:var(--cyan);"></div></div>
+          <div class="projection-target">/ 600</div>
+        </div>
+        <div class="projection-row">
+          <div class="projection-label">SmartConnect</div>
+          <div class="projection-bar-bg"><div class="projection-bar-fill" style="width:0%; background:var(--accent);"></div></div>
+          <div class="projection-target">/ 500</div>
+        </div>
+      </div>
+      <div class="sub-panel" id="spain-newvehicles">
+        <div class="projection-row">
+          <div class="projection-label">New vehicles</div>
+          <div class="projection-bar-bg"><div class="projection-bar-fill" style="width:0%; background:rgba(59,130,246,.5);"></div></div>
+          <div class="projection-target">/ 1,000</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ── ITALY ── -->
+  <div class="country-section" id="proj-italy">
+    <button class="country-toggle" onclick="toggleProj('italy')">
+      <span>&#127470;&#127481;</span>
+      <span>Italy</span>
+      <span class="toggle-arrow">&#9654;</span>
+      <span class="toggle-summary">10 devices &middot; ~1,000 target</span>
+    </button>
+    <div class="country-body" id="proj-italy-body">
+      <div class="sub-tab-row">
+        <button class="sub-tab active" onclick="showSubTab('italy','cities',this)">Cities (5)</button>
+        <button class="sub-tab" onclick="showSubTab('italy','smartconnect',this)">SmartConnect</button>
+        <button class="sub-tab" onclick="showSubTab('italy','newvehicles',this)">New Vehicles</button>
+      </div>
+      <div class="sub-panel active" id="italy-cities">
+        <div class="city-grid">
+          <div class="city-row"><span class="city-name">Torino</span><span class="city-count" style="color:var(--green)">3</span></div>
+          <div class="city-row"><span class="city-name">Milano</span><span class="city-count" style="color:var(--green)">2</span></div>
+          <div class="city-row"><span class="city-name">Genova</span><span class="city-count" style="color:var(--green)">1</span></div>
+          <div class="city-row"><span class="city-name">Monza</span><span class="city-count" style="color:var(--green)">1</span></div>
+          <div class="city-row"><span class="city-name">Padova</span><span class="city-count" style="color:var(--green)">1</span></div>
+        </div>
+        <div style="margin-top:8px; font-size:11px; color:var(--muted);">2 devices assigned at country level only &middot; Source: MyGeotab groups</div>
+      </div>
+      <div class="sub-panel" id="italy-smartconnect">
+        <div class="projection-row">
+          <div class="projection-label">Turin Q2 (retrofit)</div>
+          <div class="projection-bar-bg"><div class="projection-bar-fill" style="width:0%; background:var(--green);"></div></div>
+          <div class="projection-target">/ 300-400</div>
+        </div>
+        <div class="projection-row">
+          <div class="projection-label">SmartConnect</div>
+          <div class="projection-bar-bg"><div class="projection-bar-fill" style="width:0%; background:var(--green);"></div></div>
+          <div class="projection-target">/ 200</div>
+        </div>
+      </div>
+      <div class="sub-panel" id="italy-newvehicles">
+        <div class="projection-row">
+          <div class="projection-label">New vehicles</div>
+          <div class="projection-bar-bg"><div class="projection-bar-fill" style="width:0%; background:rgba(34,197,94,.5);"></div></div>
+          <div class="projection-target">/ 500</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ── PORTUGAL ── -->
+  <div class="country-section" id="proj-portugal">
+    <button class="country-toggle" onclick="toggleProj('portugal')">
+      <span>&#127477;&#127481;</span>
+      <span>Portugal</span>
+      <span class="toggle-arrow">&#9654;</span>
+      <span class="toggle-summary">131 devices &middot; ~500 target</span>
+    </button>
+    <div class="country-body" id="proj-portugal-body">
+      <div class="sub-tab-row">
+        <button class="sub-tab active" onclick="showSubTab('portugal','cities',this)">Cities (1)</button>
+        <button class="sub-tab" onclick="showSubTab('portugal','smartconnect',this)">SmartConnect</button>
+        <button class="sub-tab" onclick="showSubTab('portugal','newvehicles',this)">New Vehicles</button>
+      </div>
+      <div class="sub-panel active" id="portugal-cities">
+        <div class="city-grid">
+          <div class="city-row"><span class="city-name">Lisboa</span><span class="city-count" style="color:var(--cyan)">1</span></div>
+        </div>
+        <div style="margin-top:8px; font-size:11px; color:var(--muted);">130 devices assigned at country level only &middot; Source: MyGeotab groups</div>
+      </div>
+      <div class="sub-panel" id="portugal-smartconnect">
+        <div class="projection-row">
+          <div class="projection-label">Lisbon</div>
+          <div class="projection-bar-bg"><div class="projection-bar-fill" style="width:0%; background:var(--cyan);"></div></div>
+          <div class="projection-target">/ 300-400</div>
+        </div>
+        <div class="projection-row">
+          <div class="projection-label">SmartConnect</div>
+          <div class="projection-bar-bg"><div class="projection-bar-fill" style="width:0%; background:var(--cyan);"></div></div>
+          <div class="projection-target">/ 100</div>
+        </div>
+      </div>
+      <div class="sub-panel" id="portugal-newvehicles">
+        <div class="projection-row">
+          <div class="projection-label">New vehicles</div>
+          <div class="projection-bar-bg"><div class="projection-bar-fill" style="width:0%; background:rgba(6,182,212,.5);"></div></div>
+          <div class="projection-target">/ 100</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ── POLAND ── -->
+  <div class="country-section" id="proj-poland">
+    <button class="country-toggle" onclick="toggleProj('poland')">
+      <span>&#127477;&#127473;</span>
+      <span>Poland</span>
+      <span class="toggle-arrow">&#9654;</span>
+      <span class="toggle-summary">76 devices &middot; 250 target (all new)</span>
+    </button>
+    <div class="country-body" id="proj-poland-body">
+      <div class="sub-tab-row">
+        <button class="sub-tab active" onclick="showSubTab('poland','cities',this)">Cities (1)</button>
+        <button class="sub-tab" onclick="showSubTab('poland','smartconnect',this)">SmartConnect</button>
+        <button class="sub-tab" onclick="showSubTab('poland','newvehicles',this)">New Vehicles</button>
+      </div>
+      <div class="sub-panel active" id="poland-cities">
+        <div class="city-grid">
+          <div class="city-row"><span class="city-name">Warszawa Bronisze</span><span class="city-count" style="color:var(--amber)">4</span></div>
+        </div>
+        <div style="margin-top:8px; font-size:11px; color:var(--muted);">72 devices assigned at country level only &middot; Source: MyGeotab groups</div>
+      </div>
+      <div class="sub-panel" id="poland-smartconnect">
+        <div style="font-size:12px; color:var(--muted); padding:8px 0;">No SmartConnect contracts planned for Poland</div>
+      </div>
+      <div class="sub-panel" id="poland-newvehicles">
+        <div class="projection-row">
+          <div class="projection-label">Q1 rollout</div>
+          <div class="projection-bar-bg"><div class="projection-bar-fill" style="width:76%; background:var(--amber);">76</div></div>
+          <div class="projection-target">/ 100</div>
+        </div>
+        <div class="projection-row">
+          <div class="projection-label">Full year 2026</div>
+          <div class="projection-bar-bg"><div class="projection-bar-fill" style="width:30%; background:var(--amber);">76</div></div>
+          <div class="projection-target">/ 250</div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- =========================================================
+     SECTION 5 — HOT TOPICS
+     ========================================================= -->
+<div class="section-title"><span class="dot" style="background:var(--amber)"></span> Hot Topics</div>
+
+<div class="grid-3">
+  <!-- Installations & Hardware -->
+  <div class="card">
+    <div class="card-title" style="margin-bottom:12px;">Deployment Progress</div>
+    <div class="topic-card priority-high">
+      <div class="topic-title">Cold Chain Integration — ThermoKing CSR</div>
+      <div class="topic-meta"><span>Ongoing</span><span>Poland</span></div>
+    </div>
+    <div class="topic-card priority-medium">
+      <div class="topic-title">ELA Integration</div>
+      <div class="topic-meta"><span>Not started</span><span>Multi-country</span></div>
+    </div>
+    <div class="topic-card priority-medium">
+      <div class="topic-title">E-Toll Integration</div>
+      <div class="topic-meta"><span>Ongoing</span><span>Poland</span></div>
+    </div>
+    <div class="topic-card priority-low">
+      <div class="topic-title">Data Act Compliance</div>
+      <div class="topic-meta"><span>Monitoring</span><span>All countries</span></div>
+    </div>
+    <div class="topic-card priority-low">
+      <div class="topic-title">Billing & Invoicing Process</div>
+      <div class="topic-meta"><span>Ongoing</span><span>Finance</span></div>
+    </div>
+  </div>
+
+  <!-- Integration & Data -->
+  <div class="card">
+    <div class="card-title" style="margin-bottom:12px;">Installations & Maintenance</div>
+    <div class="topic-card priority-high">
+      <div class="topic-title">GO9 Installation via Tachograph Port A</div>
+      <div class="topic-meta"><span>Ongoing</span><span>All countries</span></div>
+    </div>
+    <div class="topic-card priority-high">
+      <div class="topic-title">Harness Testing & Legal Validation (ES)</div>
+      <div class="topic-meta"><span>Ongoing</span><span>Spain</span></div>
+    </div>
+    <div class="topic-card priority-medium">
+      <div class="topic-title">IOX-CLAMP Deployment</div>
+      <div class="topic-meta"><span>Ongoing</span><span>Spain</span></div>
+    </div>
+    <div class="topic-card priority-medium">
+      <div class="topic-title">Immobilizer Installation (Lecapitaine / IVECO)</div>
+      <div class="topic-meta"><span>Ongoing</span><span>Italy</span></div>
+    </div>
+    <div class="topic-card priority-low">
+      <div class="topic-title">Bluebox for ThermoKing</div>
+      <div class="topic-meta"><span>Ongoing</span><span>Poland</span></div>
+    </div>
+  </div>
+
+  <!-- Users & Operations -->
+  <div class="card">
+    <div class="card-title" style="margin-bottom:12px;">PF MyGeotab & Users</div>
+    <div class="topic-card priority-medium">
+      <div class="topic-title">Champion Training & Appointments</div>
+      <div class="topic-meta"><span>Ongoing</span><span>All countries</span></div>
+    </div>
+    <div class="topic-card priority-medium">
+      <div class="topic-title">Fault Code Categorization & Reports</div>
+      <div class="topic-meta"><span>Ongoing</span><span>All countries</span></div>
+    </div>
+    <div class="topic-card priority-medium">
+      <div class="topic-title">Custom Report Development</div>
+      <div class="topic-meta"><span>Not started</span><span>All countries</span></div>
+    </div>
+    <div class="topic-card priority-medium">
+      <div class="topic-title">User Personas Validation</div>
+      <div class="topic-meta"><span>Finished</span><span>All countries</span></div>
+    </div>
+    <div class="topic-card priority-low">
+      <div class="topic-title">Group Structure Reorganization</div>
+      <div class="topic-meta"><span>Ongoing</span><span>MyGeotab</span></div>
+    </div>
+  </div>
+</div>
+
+<!-- =========================================================
+     SECTION 6 — ACTION ITEMS
+     ========================================================= -->
+<div class="section-title"><span class="dot" style="background:var(--green)"></span> Action Items</div>
+
+<div class="card" style="margin-bottom:24px;">
+  <div class="tabs">
+    <button class="tab active" onclick="filterActions('all',this)">All</button>
+    <button class="tab" onclick="filterActions('ongoing',this)">Ongoing</button>
+    <button class="tab" onclick="filterActions('not-started',this)">Not Started</button>
+    <button class="tab" onclick="filterActions('finished',this)">Finished</button>
+  </div>
+  <table id="actionTable">
+    <thead>
+      <tr><th>Date</th><th>Action</th><th>Owner</th><th>Country</th><th>Status</th></tr>
+    </thead>
+    <tbody>
+      <tr data-status="ongoing"><td>Feb 17</td><td>Cold chain integration (ThermoKing CSR) — Poland validation</td><td>Majdi / Max</td><td>PL</td><td><span class="status status-ongoing">Ongoing</span></td></tr>
+      <tr data-status="ongoing"><td>Feb 17</td><td>GO9 installation via Tachograph Port A — testing &amp; legal</td><td>Majdi</td><td>All</td><td><span class="status status-ongoing">Ongoing</span></td></tr>
+      <tr data-status="ongoing"><td>Feb 17</td><td>Installation issue Portugal — GO9 device logs investigation</td><td>Pablo / Majdi</td><td>PT</td><td><span class="status status-ongoing">Ongoing</span></td></tr>
+      <tr data-status="ongoing"><td>Feb 17</td><td>Fault code analysis &amp; categorization for workshop reports</td><td>Majdi / Miguel</td><td>All</td><td><span class="status status-ongoing">Ongoing</span></td></tr>
+      <tr data-status="ongoing"><td>Feb 17</td><td>Immobilizer installation on IVECO — Italy approval pending</td><td>Majdi</td><td>IT</td><td><span class="status status-ongoing">Ongoing</span></td></tr>
+      <tr data-status="ongoing"><td>Feb 17</td><td>Polish E-toll integration testing</td><td>Tomasz</td><td>PL</td><td><span class="status status-ongoing">Ongoing</span></td></tr>
+      <tr data-status="ongoing"><td>Jan 27</td><td>IOX-CLAMP reception &amp; deployment — Spain</td><td>Majdi / Guillaume</td><td>ES</td><td><span class="status status-ongoing">Ongoing</span></td></tr>
+      <tr data-status="not-started"><td>Feb 17</td><td>Custom fault code reports for PF workshops</td><td>Miguel</td><td>All</td><td><span class="status status-not-started">Not Started</span></td></tr>
+      <tr data-status="not-started"><td>Feb 17</td><td>Vehicle access for Port A investigation</td><td>PF / Geotab</td><td>All</td><td><span class="status status-not-started">Not Started</span></td></tr>
+      <tr data-status="not-started"><td>Feb 17</td><td>Netherlands Q2 deployment planning</td><td>Guillaume</td><td>NL</td><td><span class="status status-not-started">Not Started</span></td></tr>
+      <tr data-status="finished"><td>Jan 27</td><td>User personas list validation</td><td>Paola</td><td>All</td><td><span class="status status-finished">Finished</span></td></tr>
+      <tr data-status="finished"><td>Jan 8</td><td>Installation training — Igloocar (Poland)</td><td>Paola</td><td>PL</td><td><span class="status status-finished">Finished</span></td></tr>
+      <tr data-status="finished"><td>Dec 16</td><td>Zanotti temperature probe testing</td><td>Majdi</td><td>ES</td><td><span class="status status-finished">Finished</span></td></tr>
+    </tbody>
+  </table>
+</div>
+
+<!-- =========================================================
+     SECTION 7 — COUNTRY DEPLOYMENT STATUS
+     ========================================================= -->
+<div class="section-title"><span class="dot" style="background:var(--cyan)"></span> Country Deployment Status</div>
+
+<div class="grid-3" style="margin-bottom:24px;">
+  <!-- Spain -->
+  <div class="card">
+    <div style="display:flex; align-items:center; gap:10px; margin-bottom:12px;">
+      <span style="font-size:24px;">&#127466;&#127480;</span>
+      <div>
+        <div style="font-weight:600;">Spain</div>
+        <div style="font-size:12px; color:var(--muted);">675 vehicles &middot; 20+ clients</div>
+      </div>
+    </div>
+    <table>
+      <tr><td style="color:var(--muted)">Champion</td><td>Rubén Correas</td></tr>
+      <tr><td style="color:var(--muted)">Contact</td><td>Javier Cerrillo Garcia</td></tr>
+      <tr><td style="color:var(--muted)">Status</td><td><span class="status status-ongoing">Ongoing</span></td></tr>
+      <tr><td style="color:var(--muted)">Focus</td><td>Cold chain reports, IOX-CLAMP</td></tr>
+    </table>
+  </div>
+
+  <!-- Portugal -->
+  <div class="card">
+    <div style="display:flex; align-items:center; gap:10px; margin-bottom:12px;">
+      <span style="font-size:24px;">&#127477;&#127481;</span>
+      <div>
+        <div style="font-weight:600;">Portugal</div>
+        <div style="font-size:12px; color:var(--muted);">61 vehicles</div>
+      </div>
+    </div>
+    <table>
+      <tr><td style="color:var(--muted)">Champion</td><td>Filipe Ribeiro</td></tr>
+      <tr><td style="color:var(--muted)">Contact</td><td>Didier Ribeiro</td></tr>
+      <tr><td style="color:var(--muted)">Status</td><td><span class="status status-ongoing">Ongoing</span></td></tr>
+      <tr><td style="color:var(--muted)">Focus</td><td>Installation validation, GO9 logs</td></tr>
+      <tr><td style="color:var(--muted)">Training</td><td>Feb 23-24, 2026</td></tr>
+    </table>
+  </div>
+
+  <!-- Poland -->
+  <div class="card">
+    <div style="display:flex; align-items:center; gap:10px; margin-bottom:12px;">
+      <span style="font-size:24px;">&#127477;&#127473;</span>
+      <div>
+        <div style="font-weight:600;">Poland</div>
+        <div style="font-size:12px; color:var(--muted);">13 vehicles &middot; 250 projected 2026</div>
+      </div>
+    </div>
+    <table>
+      <tr><td style="color:var(--muted)">Champion</td><td>Rafal Zach</td></tr>
+      <tr><td style="color:var(--muted)">Contact</td><td>Maciej Chałas</td></tr>
+      <tr><td style="color:var(--muted)">Status</td><td><span class="status status-ongoing">Ongoing</span></td></tr>
+      <tr><td style="color:var(--muted)">Focus</td><td>E-Toll, ThermoKing CSR</td></tr>
+      <tr><td style="color:var(--muted)">Installer</td><td>Igloocar (trained)</td></tr>
+    </table>
+  </div>
+
+  <!-- Italy -->
+  <div class="card">
+    <div style="display:flex; align-items:center; gap:10px; margin-bottom:12px;">
+      <span style="font-size:24px;">&#127470;&#127481;</span>
+      <div>
+        <div style="font-weight:600;">Italy</div>
+        <div style="font-size:12px; color:var(--muted);">8 vehicles</div>
+      </div>
+    </div>
+    <table>
+      <tr><td style="color:var(--muted)">Champion</td><td>Davide Arriotti</td></tr>
+      <tr><td style="color:var(--muted)">Contacts</td><td>Giuseppe, Juri, Francesco</td></tr>
+      <tr><td style="color:var(--muted)">Status</td><td><span class="status status-ongoing">Ongoing</span></td></tr>
+      <tr><td style="color:var(--muted)">Focus</td><td>Immobilizer on IVECO</td></tr>
+    </table>
+  </div>
+
+  <!-- Morocco -->
+  <div class="card">
+    <div style="display:flex; align-items:center; gap:10px; margin-bottom:12px;">
+      <span style="font-size:24px;">&#127474;&#127462;</span>
+      <div>
+        <div style="font-weight:600;">Morocco</div>
+        <div style="font-size:12px; color:var(--muted);">Tender phase &middot; 200 Isuzu</div>
+      </div>
+    </div>
+    <table>
+      <tr><td style="color:var(--muted)">Status</td><td><span class="status status-not-started">Not Started</span></td></tr>
+      <tr><td style="color:var(--muted)">Note</td><td>OBD port blocked, custom duties</td></tr>
+    </table>
+  </div>
+
+  <!-- Netherlands -->
+  <div class="card">
+    <div style="display:flex; align-items:center; gap:10px; margin-bottom:12px;">
+      <span style="font-size:24px;">&#127475;&#127473;</span>
+      <div>
+        <div style="font-weight:600;">Netherlands</div>
+        <div style="font-size:12px; color:var(--muted);">Planned Q2 2026 &middot; 200 target</div>
+      </div>
+    </div>
+    <table>
+      <tr><td style="color:var(--muted)">Status</td><td><span class="status status-not-started">Not Started</span></td></tr>
+    </table>
+  </div>
+</div>
+
+<!-- Footer -->
+<div style="text-align:center; padding:24px 0; font-size:12px; color:var(--muted); border-top:1px solid var(--border);">
+  Petit Forestier &times; Geotab &mdash; Deployment Dashboard &middot; Data as of Feb 26, 2026 &middot; Internal use only
+</div>
+
+</div><!-- /container -->
+
+<script>
+// --- Devices Ordered by Country Donut (MyAdmin PETI01) ---
+new Chart(document.getElementById('connectivityChart'), {
+  type: 'doughnut',
+  data: {
+    labels: ['Spain', 'Portugal', 'Poland', 'Italy', 'France'],
+    datasets: [{
+      data: [1319, 178, 80, 25, 39],
+      backgroundColor: ['#3b82f6', '#06b6d4', '#f59e0b', '#22c55e', '#f97316'],
+      borderWidth: 0,
+      hoverOffset: 6
+    }]
+  },
+  options: {
+    cutout: '70%',
+    responsive: true,
+    maintainAspectRatio: false,
+    plugins: {
+      legend: { display: false },
+      tooltip: { backgroundColor: '#1a1d27', titleColor: '#e4e4e7', bodyColor: '#e4e4e7', borderColor: '#2a2d3a', borderWidth: 1 }
+    }
+  }
+});
+
+// --- Fleet Growth Trend ---
+new Chart(document.getElementById('trendChart'), {
+  type: 'line',
+  data: {
+    labels: ['Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec', 'Jan', 'Feb', 'Now'],
+    datasets: [
+      {
+        label: 'Total Fleet',
+        data: [206, 364, 395, 418, 683, 892, 1270, 1571, 1577],
+        borderColor: '#3b82f6',
+        backgroundColor: 'rgba(59,130,246,.08)',
+        fill: true,
+        tension: .3,
+        pointRadius: [4,4,4,4,4,4,4,4,6],
+        pointBackgroundColor: '#3b82f6'
+      },
+      {
+        label: 'Installed',
+        data: [175, 247, 309, 398, 496, 598, 790, 1085, 1085],
+        borderColor: '#22c55e',
+        backgroundColor: 'rgba(34,197,94,.08)',
+        fill: true,
+        tension: .3,
+        pointRadius: [4,4,4,4,4,4,4,4,6],
+        pointBackgroundColor: '#22c55e'
+      }
+    ]
+  },
+  options: {
+    responsive: true,
+    maintainAspectRatio: false,
+    scales: {
+      x: { grid: { color: 'rgba(42,45,58,.5)' }, ticks: { color: '#8b8d97', font: { size: 10 } } },
+      y: { grid: { color: 'rgba(42,45,58,.5)' }, ticks: { color: '#8b8d97', font: { size: 10 } }, beginAtZero: true }
+    },
+    plugins: {
+      legend: { labels: { color: '#8b8d97', usePointStyle: true, pointStyle: 'circle', padding: 12, font: { size: 11 } } },
+      tooltip: { backgroundColor: '#1a1d27', titleColor: '#e4e4e7', bodyColor: '#e4e4e7', borderColor: '#2a2d3a', borderWidth: 1 }
+    }
+  }
+});
+
+// --- Internal vs Shared Split ---
+new Chart(document.getElementById('splitChart'), {
+  type: 'bar',
+  data: {
+    labels: ['Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec', 'Jan', 'Feb', 'Now'],
+    datasets: [
+      {
+        label: 'Internal',
+        data: [102, 94, 199, 204, 220, 447, 627, 988, 1238],
+        backgroundColor: '#3b82f6',
+        borderRadius: 4
+      },
+      {
+        label: 'Shared',
+        data: [65, 113, 166, 191, 206, 233, 266, 296, 339],
+        backgroundColor: '#a855f7',
+        borderRadius: 4
+      }
+    ]
+  },
+  options: {
+    responsive: true,
+    maintainAspectRatio: false,
+    scales: {
+      x: { stacked: true, grid: { display: false }, ticks: { color: '#8b8d97', font: { size: 10 } } },
+      y: { stacked: true, grid: { color: 'rgba(42,45,58,.5)' }, ticks: { color: '#8b8d97', font: { size: 10 } } }
+    },
+    plugins: {
+      legend: { labels: { color: '#8b8d97', usePointStyle: true, pointStyle: 'circle', padding: 12, font: { size: 11 } } },
+      tooltip: { backgroundColor: '#1a1d27', titleColor: '#e4e4e7', bodyColor: '#e4e4e7', borderColor: '#2a2d3a', borderWidth: 1 }
+    }
+  }
+});
+
+// --- Projection toggles ---
+function toggleProj(country) {
+  const btn = document.querySelector(`#proj-${country} .country-toggle`);
+  const body = document.getElementById(`proj-${country}-body`);
+  btn.classList.toggle('open');
+  body.classList.toggle('open');
+}
+function showSubTab(country, tab, btn) {
+  const section = document.getElementById(`proj-${country}-body`);
+  section.querySelectorAll('.sub-tab').forEach(t => t.classList.remove('active'));
+  section.querySelectorAll('.sub-panel').forEach(p => p.classList.remove('active'));
+  btn.classList.add('active');
+  document.getElementById(`${country}-${tab}`).classList.add('active');
+}
+
+// --- Action table filter ---
+function filterActions(status, btn) {
+  document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+  btn.classList.add('active');
+  document.querySelectorAll('#actionTable tbody tr').forEach(row => {
+    row.style.display = (status === 'all' || row.dataset.status === status) ? '' : 'none';
+  });
+}
+</script>
+</body>
+</html>
